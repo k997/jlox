@@ -20,8 +20,11 @@ public class GenerateAst {
          * 2. Grouping（分组表达式，括号）
          * 3. Literal（字面量表达式）
          * 4. Unary（一元表达式）。
+         * 5. Variable (变量名)
+         * 6. Assign （赋值)
          */
         defineAst(outputDir, "Expr", Arrays.asList(
+                "Assign : Token name, Expr value",
                 "Binary   : Expr left, Token operator, Expr right",
                 "Grouping : Expr expression",
                 "Literal  : Object value",
