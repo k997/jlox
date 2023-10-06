@@ -10,7 +10,13 @@ import java.util.List;
 
 public class JLox {
 
+    // 扫描和构建抽象语法树出现错误
     static boolean hadError = false;
+    // 表达式求值出现错误
+    static boolean hadRuntimeError = false;
+
+    // 解释器——表达式求值
+    private static final Interpreter interpreter = new Interpreter();
 
     public static void main(String[] args) throws IOException {
         if (args.length > 1) {
@@ -30,6 +36,9 @@ public class JLox {
 
         if (hadError)
             System.exit(65);
+
+        if (hadRuntimeError)
+            System.exit(70);
     }
 
     private static void runPrompt() throws IOException {
@@ -49,15 +58,21 @@ public class JLox {
     }
 
     private static void run(String source) {
+        // 扫描词法单元
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
 
+        // 构建抽象语法树
         Parser parser = new Parser(tokens);
         Expr expression = parser.parse();
 
         if (hadError)
             return;
-        System.out.println(new AstPrinter().print(expression));
+        // 打印抽象语法树
+        // System.out.println(new AstPrinter().print(expression));
+
+        // 解释运行表达式
+        interpreter.interpreter(expression);
     }
 
     static void error(int line, String message) {
@@ -69,6 +84,11 @@ public class JLox {
             report(token.line, "at end", message);
         else
             report(token.line, " at '" + token.lexeme + "'", message);
+    }
+
+    static void runtimeError(RuntimeError error) {
+        System.err.println(error.getMessage() + "\n[line " + error.token.line + "]");
+        hadRuntimeError = true;
     }
 
     private static void report(int line, String where, String message) {
