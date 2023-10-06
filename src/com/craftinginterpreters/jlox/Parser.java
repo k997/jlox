@@ -1,9 +1,16 @@
 /* 
 
 递归下降分析——自顶向下解析器（实际优先级自低向高）
-从最顶部或最外层的语法规则(这里是`expression`)开始，一直向下进入嵌套子表达式，最后到达语法树的叶子。
+从最顶部或最外层的语法规则(这里是 program )开始，一直向下进入嵌套子表达式，最后到达语法树的叶子。
 这与LR等自下而上的解析器从初级表达式(primary)开始，将其组成越来越大的语法块
 
+print 在常规语言中应该只是库函数的一种，
+此处为了能在实现定义和调用函数机制前使用 print 的功能，将其实现为语句。
+
+program        → statement* EOF ;
+statement      → exprStmt | printStmt ;
+exprStmt       → expression ";" ;
+printStmt      → "print" expression ";" ;
 expression     → equality ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -17,6 +24,7 @@ primary        → NUMBER | STRING | "true" | "false" | "nil"
 package com.craftinginterpreters.jlox;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import static com.craftinginterpreters.jlox.TokenType.*;
 
@@ -32,13 +40,31 @@ class Parser {
         this.tokens = tokens;
     }
 
-    Expr parse() {
-        // 法错误恢复是解析器的工作，禁止 ParseError 异常逃逸到解释器的其它部分。
-        try {
-            return expression();
-        } catch (ParseError err) {
-            return null;
-        }
+    List<Stmt> parse() {
+
+        List<Stmt> statements = new ArrayList<>();
+        while (!isAtEnd())
+            statements.add(statement());
+        return statements;
+    }
+
+    private Stmt statement() {
+        if (match(PRINT))
+            return printStatement();
+        return expressionStatement();
+    }
+
+    private Stmt expressionStatement() {
+        Expr expr = expression();
+        consume(SEMICOLON, "Expect ';' after expression.");
+        return new Stmt.Expression(expr);
+
+    }
+
+    private Stmt printStatement() {
+        Expr value = expression();
+        consume(SEMICOLON, "Expect ';' after value.");
+        return new Stmt.Print(value);
     }
 
     private Expr expression() {

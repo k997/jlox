@@ -64,7 +64,7 @@ public class JLox {
 
         // 构建抽象语法树
         Parser parser = new Parser(tokens);
-        Expr expression = parser.parse();
+        List<Stmt> statements = parser.parse();
 
         if (hadError)
             return;
@@ -72,7 +72,7 @@ public class JLox {
         // System.out.println(new AstPrinter().print(expression));
 
         // 解释运行表达式
-        interpreter.interpreter(expression);
+        interpreter.interpreter(statements);
     }
 
     static void error(int line, String message) {

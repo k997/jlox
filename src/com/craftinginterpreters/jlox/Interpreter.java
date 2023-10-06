@@ -1,5 +1,7 @@
 package com.craftinginterpreters.jlox;
 
+import java.util.List;
+
 /* 
 
 针对不同的类型，用访问者模式重写表达式求值方法
@@ -16,16 +18,36 @@ LOX 类在 JAVA 中的表示
 
  */
 
-class Interpreter implements Expr.Visitor<Object> {
+class Interpreter implements Expr.Visitor<Object>,
+        Stmt.Visitor<Void> {
 
-    void interpreter(Expr expression) {
+    void interpreter(List<Stmt> statements) {
         try {
-            Object value = evaluate(expression);
-            System.out.println(stringfy(value));
+            for (Stmt statement : statements) {
+                execute(statement);
+            }
         } catch (RuntimeError error) {
             // 是 JLox 中的方法，而不是 RuntimeError 类
             JLox.runtimeError(error);
         }
+    }
+
+    private void execute(Stmt stmt) {
+        stmt.accept(this);
+    }
+
+    @Override
+    public Void visitExpressionStmt(Stmt.Expression stmt) {
+        // 执行语句中的表达式
+        evaluate(stmt.expression);
+        return null;
+    }
+
+    @Override
+    public Void visitPrintStmt(Stmt.Print stmt) {
+        Object value = evaluate(stmt.expression);
+        System.out.println(stringfy(value));
+        return null;
     }
 
     @Override
