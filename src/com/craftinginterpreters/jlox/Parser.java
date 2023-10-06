@@ -118,7 +118,7 @@ class Parser {
     }
 
     /*
-     * 赋值语句
+     * 相等性（相等/不等）：==,!=
      * 因为 Binary 可以以任意方式嵌套，因此用 while 处理
      * equality，comparison，term,factor 实际上都是 Binary， 因此都用 while
      * unary 和 primary 用 if
@@ -133,7 +133,7 @@ class Parser {
         return expr;
     }
 
-    /* 比较 */
+    /*  比较大小：>, >=, <, <= */
     private Expr comparison() {
         Expr expr = term();
         while (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
