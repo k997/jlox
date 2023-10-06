@@ -21,6 +21,8 @@ LOX 类在 JAVA 中的表示
 class Interpreter implements Expr.Visitor<Object>,
         Stmt.Visitor<Void> {
 
+    private Environment environment = new Environment();
+
     void interpreter(List<Stmt> statements) {
         try {
             for (Stmt statement : statements) {
@@ -37,6 +39,17 @@ class Interpreter implements Expr.Visitor<Object>,
     }
 
     @Override
+    public Void visitVarStmt(Stmt.Var stmt) {
+        Object value = null;
+        // 如果该变量有初始化式，我们就对其求值。如果没有则初始化为 null
+        if (stmt.initializer != null)
+            value = evaluate(stmt.initializer);
+
+        environment.define(stmt.name.lexeme, value);
+        return null;
+    }
+
+    @Override
     public Void visitExpressionStmt(Stmt.Expression stmt) {
         // 执行语句中的表达式
         evaluate(stmt.expression);
@@ -48,6 +61,14 @@ class Interpreter implements Expr.Visitor<Object>,
         Object value = evaluate(stmt.expression);
         System.out.println(stringfy(value));
         return null;
+    }
+
+    @Override
+    public Object visitAssignExpr(Expr.Assign expr) {
+        // 赋值语句的值也是表达式
+        Object value = evaluate(expr.value);
+        environment.assign(expr.name, value);
+        return value;
     }
 
     @Override
@@ -126,6 +147,11 @@ class Interpreter implements Expr.Visitor<Object>,
         }
 
         return null;
+    }
+
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr) {
+        return environment.get(expr.name);
     }
 
     // 对子表达式求值

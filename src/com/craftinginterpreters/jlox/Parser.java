@@ -7,11 +7,15 @@
 print 在常规语言中应该只是库函数的一种，
 此处为了能在实现定义和调用函数机制前使用 print 的功能，将其实现为语句。
 
-program        → statement* EOF ;
+program        → declaration* EOF;
+declaration    → varDecl | statement ;
+varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
 statement      → exprStmt | printStmt ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
-expression     → equality ;
+expression     → assignment ;
+assignment     → IDENTIFIER "=" assignment
+               | equality ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term           → factor ( ( "-" | "+" ) factor )* ;
@@ -19,7 +23,8 @@ factor         → unary ( ( "/" | "*" ) unary )* ;
 unary          → ( "!" | "-" ) unary
                | primary ;
 primary        → NUMBER | STRING | "true" | "false" | "nil"
-               | "(" expression ")" ; */
+               | "(" expression ")"
+               | IDENTIFIER ; */
 
 package com.craftinginterpreters.jlox;
 
@@ -44,8 +49,28 @@ class Parser {
 
         List<Stmt> statements = new ArrayList<>();
         while (!isAtEnd())
-            statements.add(statement());
+            statements.add(declaration());
         return statements;
+    }
+
+    private Stmt declaration() {
+        try {
+            if (match(VAR))
+                return varDeclaration();
+            return statement();
+        } catch (ParseError error) {
+            synchronize();
+            return null;
+        }
+    }
+
+    private Stmt varDeclaration() {
+        Token name = consume(IDENTIFIER, "Expect variable name.");
+        Expr initializer = null;
+        if (match(EQUAL))
+            initializer = expression();
+        consume(SEMICOLON, "Expect ':' after variable declaration.");
+        return new Stmt.Var(name, initializer);
     }
 
     private Stmt statement() {
@@ -68,7 +93,28 @@ class Parser {
     }
 
     private Expr expression() {
-        return equality();
+        return assignment();
+    }
+
+    // 赋值语句
+    private Expr assignment() {
+        // 类似二元表达式，先解析左侧表达式
+        Expr expr = equality();
+        // 左侧表达式解析完后如果是 '=' ，说明是赋值语句
+        if (match(EQUAL)) {
+            // 检测左侧表达式的结果是否是合法的变量
+            if (expr instanceof Expr.Variable) {
+                Token name = ((Expr.Variable) expr).name;
+                // 计算右侧表达式
+                Expr value = assignment();
+                return new Expr.Assign(name, value);
+            }
+            // 保留 '=' 的 token 用于出现错误时错误处理
+            Token equals = previous();
+            error(equals, "Invalid assignment targe.");
+
+        }
+        return expr;
     }
 
     /*
@@ -143,6 +189,9 @@ class Parser {
         if (match(NUMBER, STRING))
             return new Expr.Literal(previous().literal);
 
+        if (match(IDENTIFIER))
+            return new Expr.Variable(previous());
+
         if (match(LEFT_PAREN)) {
             Expr expr = expression();
             consume(RIGHT_PAREN, "Expect ')' after expression.");
@@ -211,4 +260,26 @@ class Parser {
         return tokens.get(current - 1);
     }
 
+    // ParseError后，，调用该方法不断丢弃标记，直到它发现一个语句的边界，以期望回到同步状态
+    private void synchronize() {
+        advance();
+        while (!isAtEnd()) {
+            // 消耗掉的 token 是分号
+            if (previous().type == SEMICOLON)
+                return;
+
+            switch (peek().type) {
+                case CLASS:
+                case FUN:
+                case VAR:
+                case FOR:
+                case IF:
+                case WHILE:
+                case PRINT:
+                case RETURN:
+                    return;
+            }
+            advance();
+        }
+    }
 }
