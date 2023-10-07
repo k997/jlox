@@ -39,6 +39,28 @@ class Interpreter implements Expr.Visitor<Object>,
     }
 
     @Override
+    public Void visitBlockStmt(Stmt.Block stmt) {
+        executeBlock(stmt.statements, new Environment(environment));
+        return null;
+    }
+
+    private void executeBlock(List<Stmt> statements,
+            Environment environment) {
+        // 备份上级环境
+        Environment previous = this.environment;
+        try {
+            this.environment = environment;
+
+            for (Stmt stmt : statements) {
+                execute(stmt);
+            }
+        } finally {
+            // 恢复上级环境
+            this.environment = previous;
+        }
+    }
+
+    @Override
     public Void visitVarStmt(Stmt.Var stmt) {
         Object value = null;
         // 如果该变量有初始化式，我们就对其求值。如果没有则初始化为 null
