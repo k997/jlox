@@ -103,6 +103,23 @@ class Interpreter implements Expr.Visitor<Object>,
     }
 
     @Override
+    public Object visitLogicalExpr(Expr.Logical expr) {
+        // 逻辑运算符并不承诺会真正返回 true 或 false
+        // 而只是保证它将返回一个具有适当真实性的值。
+        Object left = evaluate(expr.left);
+        // 短路运算
+        if (expr.operator.type == TokenType.OR) {
+            if (isTruthy(left))
+                return left;
+        } else {
+            // AND 
+            if (!isTruthy(left))
+                return left;
+        }
+        return evaluate(expr.right);
+    }
+
+    @Override
     public Object visitLiteralExpr(Expr.Literal expr) {
         return expr.value;
     }

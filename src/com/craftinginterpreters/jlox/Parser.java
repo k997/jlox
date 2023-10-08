@@ -18,7 +18,9 @@ exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
 expression     → assignment ;
 assignment     → IDENTIFIER "=" assignment
-               | equality ;
+               | logic_or ;
+logic_or       → logic_and ( "or" logic_and )* ;
+logic_and      → equality ( "and" equality )* ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term           → factor ( ( "-" | "+" ) factor )* ;
@@ -128,7 +130,7 @@ class Parser {
     // 赋值语句
     private Expr assignment() {
         // 类似二元表达式，先解析左侧表达式
-        Expr expr = equality();
+        Expr expr = or();
         // 左侧表达式解析完后如果是 '=' ，说明是赋值语句
         if (match(EQUAL)) {
             // 检测左侧表达式的结果是否是合法的变量
@@ -143,6 +145,29 @@ class Parser {
             error(equals, "Invalid assignment targe.");
 
         }
+        return expr;
+    }
+
+    private Expr or() {
+        Expr expr = and();
+        while (match(OR)) {
+            // operator 即 OR
+            Token operator = previous();
+            Expr right = and();
+            expr = new Expr.Logical(expr, operator, right);
+        }
+        return expr;
+    }
+
+    private Expr and() {
+        Expr expr = equality();
+        while (match(AND)) {
+            // operator 即 AND
+            Token operator = previous();
+            Expr right = equality();
+            expr = new Expr.Logical(expr, operator, right);
+        }
+
         return expr;
     }
 
