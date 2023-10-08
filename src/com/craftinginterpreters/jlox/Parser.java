@@ -10,7 +10,12 @@ print 在常规语言中应该只是库函数的一种，
 program        → declaration* EOF;
 declaration    → varDecl | statement ;
 varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
-statement      → exprStmt | ifStmt | printStmt | block ;
+statement      → exprStmt
+               | ifStmt
+               | printStmt
+               | whileStmt
+               | block ;
+whileStmt      → "while" "(" expression ")" statement ;
 ifStmt         → "if" "(" expression ")" statement
                ( "else" statement )? ;
 block          → "{" declaration* "}" ;
@@ -85,6 +90,8 @@ class Parser {
             return new Stmt.Block(block());
         if (match(IF))
             return ifStatement();
+        if (match(WHILE))
+            return whileStatement();
         return expressionStatement();
     }
 
@@ -112,6 +119,16 @@ class Parser {
             elseBranch = statement();
         }
         return new Stmt.If(condition, thenBranch, elseBranch);
+    }
+
+    private Stmt whileStatement() {
+        consume(LEFT_PAREN, "Expect '(' after 'while'.");
+        Expr condition = expression();
+        consume(RIGHT_PAREN, "Expect ')' after condition.");
+
+        Stmt body = statement();
+
+        return new Stmt.While(condition, body);
     }
 
     private List<Stmt> block() {
