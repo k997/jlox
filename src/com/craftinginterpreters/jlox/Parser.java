@@ -7,6 +7,9 @@
 print 在常规语言中应该只是库函数的一种，
 此处为了能在实现定义和调用函数机制前使用 print 的功能，将其实现为语句。
 
+for 语句只是 while 语句的语法糖
+
+
 program        → declaration* EOF;
 declaration    → varDecl | statement ;
 varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
@@ -14,8 +17,12 @@ statement      → exprStmt
                | ifStmt
                | printStmt
                | whileStmt
+               | forStmt
                | block ;
 whileStmt      → "while" "(" expression ")" statement ;
+forStmt        → "for" "(" ( varDecl | exprStmt | ";" )
+                 expression? ";"
+                 expression? ")" statement ;
 ifStmt         → "if" "(" expression ")" statement
                ( "else" statement )? ;
 block          → "{" declaration* "}" ;
@@ -40,6 +47,7 @@ package com.craftinginterpreters.jlox;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import static com.craftinginterpreters.jlox.TokenType.*;
 
@@ -92,6 +100,8 @@ class Parser {
             return ifStatement();
         if (match(WHILE))
             return whileStatement();
+        if (match(FOR))
+            return forStatement();
         return expressionStatement();
     }
 
@@ -129,6 +139,72 @@ class Parser {
         Stmt body = statement();
 
         return new Stmt.While(condition, body);
+    }
+
+    private Stmt forStatement() {
+        consume(LEFT_PAREN, "Expect '(' after 'for'.");
+
+        // 解析初始化语句
+        Stmt initializer;
+        if (match(SEMICOLON)) {
+            initializer = null;
+        } else if (match(VAR)) {
+            initializer = varDeclaration();
+        } else {
+            initializer = expressionStatement();
+        }
+
+        // 解析循环条件表达式
+        Expr condition = null;
+        // loop condition 不是空语句则解析表达式，否则恒为 true
+        if (!check(SEMICOLON))
+            condition = expression();
+        // 条件表达式为空则恒为 true
+        if (condition == null)
+            condition = new Expr.Literal(true);
+        consume(SEMICOLON, "Expect ';' after loop condition.");
+
+
+        // 解析递增表达式
+        Expr increment = null;
+        if (!check(RIGHT_PAREN))
+            increment = expression();
+
+        consume(RIGHT_PAREN, "Expect ')' after for clauses.");
+
+        // 解析循环体
+        Stmt body = statement();
+        /*
+        // for 循环中 (var i = 0; i < 10; i = i + 1) 各部分都可以省略
+
+        // for 循环
+        for (var i = 0; i < 10; i = i + 1) print i;
+         // 对应的等价 while 形式
+        {
+            var i = 0;
+            while (i < 10) {
+                print i;
+                i = i + 1;
+            }
+        }
+         */
+
+        // 如果有递增表达式，则将其和循环体打包到一个 block 中
+        if (increment != null) {
+            body = new Stmt.Block(
+                    Arrays.asList(
+                            body, new Stmt.Expression(increment)));
+        }
+
+        // 加增量表达和循环体打包为 while 循环语句
+        body = new Stmt.While(condition, body);
+
+        // 有初始化语句则将初始化语句和 while 循环语句打包成 block
+        // 该 block 即 for 语句的 block
+        if (initializer != null)
+            body = new Stmt.Block(Arrays.asList(initializer, body));
+
+        return body;
     }
 
     private List<Stmt> block() {
@@ -349,6 +425,8 @@ class Parser {
                 case PRINT:
                 case RETURN:
                     return;
+                default:
+                    break;
             }
             advance();
         }

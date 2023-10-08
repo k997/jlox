@@ -149,6 +149,8 @@ class Interpreter implements Expr.Visitor<Object>,
                 return -(double) right;
             case BANG:
                 return !isTruthy(right);
+            default:
+                break;
         }
         return null;
     }
@@ -199,6 +201,8 @@ class Interpreter implements Expr.Visitor<Object>,
 
             case EQUAL_EQUAL:
                 return isEqual(left, right);
+            default:
+                break;
 
         }
 
