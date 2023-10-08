@@ -10,7 +10,9 @@ print 在常规语言中应该只是库函数的一种，
 program        → declaration* EOF;
 declaration    → varDecl | statement ;
 varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
-statement      → exprStmt | printStmt | block ;
+statement      → exprStmt | ifStmt | printStmt | block ;
+ifStmt         → "if" "(" expression ")" statement
+               ( "else" statement )? ;
 block          → "{" declaration* "}" ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
@@ -77,8 +79,10 @@ class Parser {
     private Stmt statement() {
         if (match(PRINT))
             return printStatement();
-        if(match(LEFT_BRACE))
-        return new Stmt.Block(block());
+        if (match(LEFT_BRACE))
+            return new Stmt.Block(block());
+        if (match(IF))
+            return ifStatement();
         return expressionStatement();
     }
 
@@ -95,17 +99,28 @@ class Parser {
         return new Stmt.Print(value);
     }
 
-    private List<Stmt> block()
-    {
+    private Stmt ifStatement() {
+        consume(LEFT_PAREN, "Expect '(' after 'if'.");
+        Expr condition = expression();
+        consume(RIGHT_PAREN, "Expect ')' after if condition.");
+
+        Stmt thenBranch = statement();
+        Stmt elseBranch = null;
+        if (match(ELSE)) {
+            elseBranch = statement();
+        }
+        return new Stmt.If(condition, thenBranch, elseBranch);
+    }
+
+    private List<Stmt> block() {
         List<Stmt> statements = new ArrayList<>();
-        while(!check(RIGHT_BRACE) && !isAtEnd())
-        {
+        while (!check(RIGHT_BRACE) && !isAtEnd()) {
             statements.add(declaration());
         }
         consume(RIGHT_BRACE, "Expect '}' after block.");
         return statements;
     }
-    
+
     private Expr expression() {
         return assignment();
     }
@@ -147,7 +162,7 @@ class Parser {
         return expr;
     }
 
-    /*  比较大小：>, >=, <, <= */
+    /* 比较大小：>, >=, <, <= */
     private Expr comparison() {
         Expr expr = term();
         while (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
