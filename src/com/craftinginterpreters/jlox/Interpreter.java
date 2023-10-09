@@ -1,5 +1,6 @@
 package com.craftinginterpreters.jlox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /* 
@@ -21,7 +22,9 @@ LOX 类在 JAVA 中的表示
 class Interpreter implements Expr.Visitor<Object>,
         Stmt.Visitor<Void> {
 
-    private Environment environment = new Environment();
+    final Environment globals = new Environment();
+    // environment 会随着作用域改变而变化
+    private Environment environment = globals;
 
     void interpreter(List<Stmt> statements) {
         try {
@@ -36,6 +39,23 @@ class Interpreter implements Expr.Visitor<Object>,
 
     private void execute(Stmt stmt) {
         stmt.accept(this);
+    }
+
+    @Override
+    public Void visitFunctionStmt(Stmt.Function stmt) {
+        JLoxFunction function = new JLoxFunction(stmt);
+        environment.define(stmt.name.lexeme, function);
+        return null;
+    }
+
+    @Override
+    public Void visitReturnStmt(Stmt.Return stmt) {
+        Object value = null;
+        // 有返回值则对返回值求值
+        if (stmt.value != null)
+            value = evaluate(stmt.value);
+        // JLox 的 return 使用 Java 的异常机制跳出多层调用栈
+        throw new Return(value);
     }
 
     @Override
@@ -61,7 +81,7 @@ class Interpreter implements Expr.Visitor<Object>,
         return null;
     }
 
-    private void executeBlock(List<Stmt> statements,
+    public void executeBlock(List<Stmt> statements,
             Environment environment) {
         // 备份上级环境
         Environment previous = this.environment;
@@ -212,6 +232,36 @@ class Interpreter implements Expr.Visitor<Object>,
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
         return environment.get(expr.name);
+    }
+
+    @Override
+    public Object visitCallExpr(Expr.Call expr) {
+        /*
+         * 对被调用者的表达式求值
+         * 通常情况下，这个表达式只是一个标识符,
+         * 但也可能是一个执行结果为函数的表达式
+         */
+        Object callee = evaluate(expr.callee);
+        List<Object> arguments = new ArrayList<>();
+        for (Expr argument : expr.arguments) {
+            arguments.add(evaluate(argument));
+        }
+
+        // 防止被调函数不是可被调用的对象
+        if (!(callee instanceof JLoxCallable)) {
+            throw new RuntimeError(expr.paren, "Can only call functions and classes");
+        }
+        JLoxCallable function = (JLoxCallable) callee;
+
+        // 判断传入实参与被调函数形参数量是否一致
+        if (arguments.size() != function.arity()) {
+            throw new RuntimeError(expr.paren, "Expected " +
+                    function.arity() + " arguments but got " +
+                    arguments.size() + ".");
+        }
+
+        return function.call(this, arguments);
+
     }
 
     // 对子表达式求值

@@ -10,15 +10,28 @@ print 在常规语言中应该只是库函数的一种，
 for 语句只是 while 语句的语法糖
 
 
+可以把调用看作是一种以`(`开头的后缀运算符, 调用 = primary + ()
+被调用函数的名称实际上并不是调用语法的一部分,
+
+funDecl 和 function 分开是因为类方法也会复用 function
+
+Lox是动态类型的，所以没有真正的void函数。
+省略了`return `语句中的值，我们将其视为等价于`return nil;`
+
 program        → declaration* EOF;
-declaration    → varDecl | statement ;
+declaration    → varDecl | funDecl |statement ;
 varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
+funDecl        → "fun" function ;
+function       → IDENTIFIER "(" parameters? ")" block ;
+parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
 statement      → exprStmt
                | ifStmt
                | printStmt
                | whileStmt
                | forStmt
-               | block ;
+               | block 
+               | returnStmt ;
+returnStmt     → "return" expression? ";" ;
 whileStmt      → "while" "(" expression ")" statement ;
 forStmt        → "for" "(" ( varDecl | exprStmt | ";" )
                  expression? ";"
@@ -38,7 +51,9 @@ comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term           → factor ( ( "-" | "+" ) factor )* ;
 factor         → unary ( ( "/" | "*" ) unary )* ;
 unary          → ( "!" | "-" ) unary
-               | primary ;
+               | call ;
+call           → primary ( "(" arguments? ")" )* ;
+arguments      → expression ( "," expression )* ;
 primary        → NUMBER | STRING | "true" | "false" | "nil"
                | "(" expression ")"
                | IDENTIFIER ; */
@@ -57,6 +72,8 @@ class Parser {
     };
 
     private final List<Token> tokens;
+    // 函数调用支持的最大参数数量
+    private final int MAX_ARITY = 255;
     private int current = 0;
 
     Parser(List<Token> tokens) {
@@ -75,6 +92,8 @@ class Parser {
         try {
             if (match(VAR))
                 return varDeclaration();
+            if (match(FUN))
+                return function("function");
             return statement();
         } catch (ParseError error) {
             synchronize();
@@ -91,6 +110,28 @@ class Parser {
         return new Stmt.Var(name, initializer);
     }
 
+    private Stmt.Function function(String kind) {
+        // 解析函数名/方法名
+        Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
+        consume(LEFT_PAREN, "Expect '()' after " + kind + " name.");
+        List<Token> parameters = new ArrayList<>();
+        if (!check(RIGHT_PAREN)) {
+            do {
+                if (parameters.size() >= MAX_ARITY)
+                    error(peek(), "Can't have more than " + MAX_ARITY + " parameters.");
+                parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+            } while (match(COMMA));
+        }
+
+        consume(RIGHT_PAREN, "Expect ')' after parameters.");
+
+        consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+
+        List<Stmt> body = block();
+
+        return new Stmt.Function(name, parameters, body);
+    }
+
     private Stmt statement() {
         if (match(PRINT))
             return printStatement();
@@ -102,6 +143,8 @@ class Parser {
             return whileStatement();
         if (match(FOR))
             return forStatement();
+        if (match(RETURN))
+            return returnStatement();
         return expressionStatement();
     }
 
@@ -164,7 +207,6 @@ class Parser {
             condition = new Expr.Literal(true);
         consume(SEMICOLON, "Expect ';' after loop condition.");
 
-
         // 解析递增表达式
         Expr increment = null;
         if (!check(RIGHT_PAREN))
@@ -175,18 +217,18 @@ class Parser {
         // 解析循环体
         Stmt body = statement();
         /*
-        // for 循环中 (var i = 0; i < 10; i = i + 1) 各部分都可以省略
-
-        // for 循环
-        for (var i = 0; i < 10; i = i + 1) print i;
-         // 对应的等价 while 形式
-        {
-            var i = 0;
-            while (i < 10) {
-                print i;
-                i = i + 1;
-            }
-        }
+         * // for 循环中 (var i = 0; i < 10; i = i + 1) 各部分都可以省略
+         * 
+         * // for 循环
+         * for (var i = 0; i < 10; i = i + 1) print i;
+         * // 对应的等价 while 形式
+         * {
+         * var i = 0;
+         * while (i < 10) {
+         * print i;
+         * i = i + 1;
+         * }
+         * }
          */
 
         // 如果有递增表达式，则将其和循环体打包到一个 block 中
@@ -205,6 +247,16 @@ class Parser {
             body = new Stmt.Block(Arrays.asList(initializer, body));
 
         return body;
+    }
+
+    private Stmt returnStatement() {
+        // keyword 即被消耗的 `RETURN`
+        Token keyword = previous();
+        Expr value = null;
+        if (!check(SEMICOLON))
+            value = expression();
+        consume(SEMICOLON, "Expect ';' after return value.");
+        return new Stmt.Return(keyword, value);
     }
 
     private List<Stmt> block() {
@@ -320,7 +372,37 @@ class Parser {
             Expr right = unary();
             return new Expr.Unary(operator, right);
         }
-        return primary();
+        return call();
+    }
+
+    private Expr call() {
+        Expr expr = primary();
+
+        // 函数可能被嵌套调用
+        while (true) {
+            if (match(LEFT_PAREN))
+                expr = finishCall(expr);
+            else
+                break;
+        }
+
+        return expr;
+    }
+
+    private Expr finishCall(Expr callee) {
+        List<Expr> arguments = new ArrayList<>();
+        if (!check(RIGHT_PAREN)) {
+            // 最大支持的参数
+            if (arguments.size() >= MAX_ARITY)
+                error(peek(), "can't hava more than " + MAX_ARITY + "arguments.");
+            // 不是右括号，说明有一个以上参数
+            do {
+                arguments.add(expression());
+            } while (match(COMMA));
+        }
+        Token paren = consume(RIGHT_PAREN, "Expect ')' after arguments.");
+
+        return new Expr.Call(callee, paren, arguments);
     }
 
     private Expr primary() {
