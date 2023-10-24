@@ -1,7 +1,9 @@
 package com.craftinginterpreters.jlox;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /* 
 
@@ -25,6 +27,8 @@ class Interpreter implements Expr.Visitor<Object>,
     final Environment globals = new Environment();
     // environment 会随着作用域改变而变化
     private Environment environment = globals;
+    // 语义分析时记录局部变量所处的环境的层级
+    private final Map<Expr, Integer> locals = new HashMap<>();
 
     void interpreter(List<Stmt> statements) {
         try {
@@ -41,9 +45,14 @@ class Interpreter implements Expr.Visitor<Object>,
         stmt.accept(this);
     }
 
+    // 语义分析时记录局部变量所处的环境的层级
+    void resolve(Expr expr, int depth) {
+        locals.put(expr, depth);
+    }
+
     @Override
     public Void visitFunctionStmt(Stmt.Function stmt) {
-        JLoxFunction function = new JLoxFunction(stmt);
+        JLoxFunction function = new JLoxFunction(stmt, environment);
         environment.define(stmt.name.lexeme, function);
         return null;
     }
@@ -126,7 +135,11 @@ class Interpreter implements Expr.Visitor<Object>,
     public Object visitAssignExpr(Expr.Assign expr) {
         // 赋值语句的值也是表达式
         Object value = evaluate(expr.value);
-        environment.assign(expr.name, value);
+        Integer distance = locals.get(expr);
+        if (distance != null)
+            environment.assginAt(distance, expr.name, value);
+        else
+            globals.assign(expr.name, value);
         return value;
     }
 
@@ -231,7 +244,15 @@ class Interpreter implements Expr.Visitor<Object>,
 
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
-        return environment.get(expr.name);
+        return lookUpVariable(expr.name, expr);
+    }
+
+    private Object lookUpVariable(Token name, Expr expr) {
+        Integer distance = locals.get(expr);
+        if (distance != null)
+            return environment.getAt(distance, name.lexeme);
+        else
+            return globals.get(name);
     }
 
     @Override
