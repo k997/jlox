@@ -19,7 +19,8 @@ Lox是动态类型的，所以没有真正的void函数。
 省略了`return `语句中的值，我们将其视为等价于`return nil;`
 
 program        → declaration* EOF;
-declaration    → varDecl | funDecl |statement ;
+declaration    → classDecl | varDecl | funDecl |statement ;
+classDecl      → "class" IDENTIFIER "{" function* "}" ;
 varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
 funDecl        → "fun" function ;
 function       → IDENTIFIER "(" parameters? ")" block ;
@@ -90,6 +91,8 @@ class Parser {
 
     private Stmt declaration() {
         try {
+            if (match(CLASS))
+                return classDeclaration();
             if (match(VAR))
                 return varDeclaration();
             if (match(FUN))
@@ -99,6 +102,19 @@ class Parser {
             synchronize();
             return null;
         }
+    }
+
+    private Stmt classDeclaration() {
+        Token name = consume(IDENTIFIER, "Expect class name");
+        consume(LEFT_BRACE, "Expect '{' before class body.");
+
+        List<Stmt.Function> methods = new ArrayList<>();
+        while(!check(RIGHT_BRACE)&& !isAtEnd())
+            methods.add(function("method"));
+
+        consume(RIGHT_BRACE, "Expect '}' after class body.");
+
+        return new Stmt.Class(name, methods);
     }
 
     private Stmt varDeclaration() {

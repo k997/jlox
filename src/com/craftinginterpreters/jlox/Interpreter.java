@@ -107,6 +107,14 @@ class Interpreter implements Expr.Visitor<Object>,
     }
 
     @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        environment.define(stmt.name.lexeme, null);
+        JLoxClass klass = new JLoxClass(stmt.name.lexeme);
+        environment.assign(stmt.name, klass);
+        return null;
+    }
+
+    @Override
     public Void visitVarStmt(Stmt.Var stmt) {
         Object value = null;
         // 如果该变量有初始化式，我们就对其求值。如果没有则初始化为 null
