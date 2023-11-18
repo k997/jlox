@@ -15,8 +15,12 @@ for 语句只是 while 语句的语法糖
 
 funDecl 和 function 分开是因为类方法也会复用 function
 
+类中的 getter 方法复用 "."，setter 方法复用 "="
+
 Lox是动态类型的，所以没有真正的void函数。
 省略了`return `语句中的值，我们将其视为等价于`return nil;`
+
+this 语句的实现与闭包的机制相同
 
 program        → declaration* EOF;
 declaration    → classDecl | varDecl | funDecl |statement ;
@@ -43,7 +47,7 @@ block          → "{" declaration* "}" ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
 expression     → assignment ;
-assignment     → IDENTIFIER "=" assignment
+assignment     → (call "." )? IDENTIFIER "=" assignment
                | logic_or ;
 logic_or       → logic_and ( "or" logic_and )* ;
 logic_and      → equality ( "and" equality )* ;
@@ -53,10 +57,11 @@ term           → factor ( ( "-" | "+" ) factor )* ;
 factor         → unary ( ( "/" | "*" ) unary )* ;
 unary          → ( "!" | "-" ) unary
                | call ;
-call           → primary ( "(" arguments? ")" )* ;
+call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments      → expression ( "," expression )* ;
 primary        → NUMBER | STRING | "true" | "false" | "nil"
                | "(" expression ")"
+               | THIS
                | IDENTIFIER ; */
 
 package com.craftinginterpreters.jlox;
@@ -109,7 +114,7 @@ class Parser {
         consume(LEFT_BRACE, "Expect '{' before class body.");
 
         List<Stmt.Function> methods = new ArrayList<>();
-        while(!check(RIGHT_BRACE)&& !isAtEnd())
+        while (!check(RIGHT_BRACE) && !isAtEnd())
             methods.add(function("method"));
 
         consume(RIGHT_BRACE, "Expect '}' after class body.");
@@ -300,6 +305,10 @@ class Parser {
                 // 计算右侧表达式
                 Expr value = assignment();
                 return new Expr.Assign(name, value);
+            } else if (expr instanceof Expr.Get) {
+                Expr.Get get = (Expr.Get) expr;
+                Expr value = assignment();
+                return new Expr.Set(get.object, get.name, value);
             }
             // 保留 '=' 的 token 用于出现错误时错误处理
             Token equals = previous();
@@ -398,7 +407,10 @@ class Parser {
         while (true) {
             if (match(LEFT_PAREN))
                 expr = finishCall(expr);
-            else
+            else if (match(DOT)) {
+                Token name = consume(IDENTIFIER, "Expect property name after '.'");
+                expr = new Expr.Get(expr, name);
+            } else
                 break;
         }
 
@@ -437,11 +449,15 @@ class Parser {
         if (match(IDENTIFIER))
             return new Expr.Variable(previous());
 
+        if (match(THIS))
+            return new Expr.This(previous());
+
         if (match(LEFT_PAREN)) {
             Expr expr = expression();
             consume(RIGHT_PAREN, "Expect ')' after expression.");
             return new Expr.Grouping(expr);
         }
+
         throw error(peek(), "Expect expression.");
     }
 
