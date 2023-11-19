@@ -69,7 +69,7 @@ public class JLox {
         if (hadError)
             return;
         // 打印抽象语法树
-        // System.out.println(new AstPrinter().print(expression));
+        // System.out.println(new AstPrinter().print(statements));
 
         // 通过语义分析实现闭包
         Resolver resolver = new Resolver(interpreter);
