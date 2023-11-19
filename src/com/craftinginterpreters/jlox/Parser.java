@@ -24,7 +24,7 @@ this 语句的实现与闭包的机制相同
 
 program        → declaration* EOF;
 declaration    → classDecl | varDecl | funDecl |statement ;
-classDecl      → "class" IDENTIFIER "{" function* "}" ;
+classDecl      → "class" IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
 varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
 funDecl        → "fun" function ;
 function       → IDENTIFIER "(" parameters? ")" block ;
@@ -61,7 +61,8 @@ call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments      → expression ( "," expression )* ;
 primary        → NUMBER | STRING | "true" | "false" | "nil"
                | "(" expression ")"
-               | THIS
+               | "this"
+               | "super"
                | IDENTIFIER ; */
 
 package com.craftinginterpreters.jlox;
@@ -111,6 +112,14 @@ class Parser {
 
     private Stmt classDeclaration() {
         Token name = consume(IDENTIFIER, "Expect class name");
+
+        // 检查超类是否存在
+        Expr.Variable superclass = null;
+        if (match(LESS)) {
+            consume(IDENTIFIER, "Expect superclass name.");
+            superclass = new Expr.Variable(previous()); // previous() 指向刚刚被消耗的 identifier
+        }
+
         consume(LEFT_BRACE, "Expect '{' before class body.");
 
         List<Stmt.Function> methods = new ArrayList<>();
@@ -119,7 +128,7 @@ class Parser {
 
         consume(RIGHT_BRACE, "Expect '}' after class body.");
 
-        return new Stmt.Class(name, methods);
+        return new Stmt.Class(name, superclass, methods);
     }
 
     private Stmt varDeclaration() {
@@ -449,6 +458,14 @@ class Parser {
         if (match(IDENTIFIER))
             return new Expr.Variable(previous());
 
+        if (match(SUPER))
+        {
+            Token keyward = previous();
+            consume(DOT, "Expect '.' after 'super'.");
+            Token method = consume(IDENTIFIER, "Expect superclass method name.");
+            return new Expr.Super(keyward, method);
+        }
+        
         if (match(THIS))
             return new Expr.This(previous());
 

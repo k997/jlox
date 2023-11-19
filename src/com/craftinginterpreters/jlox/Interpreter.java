@@ -109,6 +109,18 @@ class Interpreter implements Expr.Visitor<Object>,
     @Override
     public Void visitClassStmt(Stmt.Class stmt) {
         environment.define(stmt.name.lexeme, null);
+
+        Object superclass = null;
+        if (stmt.superclass != null) {
+            superclass = evaluate(stmt.superclass);
+            if (!(superclass instanceof JLoxClass))
+                throw new RuntimeError(stmt.superclass.name, "Superclass must be a class.");
+
+            // 为超类启用闭包，多次继承时使 super 能指向正确的类
+            environment = new Environment(environment);
+            environment.define("super", superclass);
+        }
+
         Map<String, JLoxFunction> methods = new HashMap<>();
         for (Stmt.Function method : stmt.methods) {
             // 插入方法同时判读是否是 init 函数
@@ -116,7 +128,10 @@ class Interpreter implements Expr.Visitor<Object>,
                     method.name.lexeme.equals("init"));
             methods.put(method.name.lexeme, function);
         }
-        JLoxClass klass = new JLoxClass(stmt.name.lexeme, methods);
+        JLoxClass klass = new JLoxClass(stmt.name.lexeme, (JLoxClass) superclass, methods);
+        if (superclass != null) {
+            environment = environment.enclosing;
+        }
         environment.assign(stmt.name, klass);
         return null;
     }
@@ -322,6 +337,15 @@ class Interpreter implements Expr.Visitor<Object>,
         return value;
     }
 
+    @Override
+    public Object visitSuperExpr(Expr.Super expr)
+    {
+        int distance = locals.get(expr);
+        JLoxClass superclass = (JLoxClass)environment.getAt(distance, "super");
+        JLoxInstance object = (JLoxInstance)environment.getAt(distance-1, "this");
+        JLoxFunction method = superclass.findMethod(expr.method.lexeme);
+        return method.bind(object);
+    }
     @Override
     public Object visitThisExpr(Expr.This expr) {
         return lookUpVariable(expr.keyword, expr);

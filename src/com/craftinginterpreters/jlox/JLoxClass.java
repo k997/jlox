@@ -5,16 +5,23 @@ import java.util.Map;
 
 public class JLoxClass implements JLoxCallable {
     final String name;
+
+    // 超类
+    final JLoxClass superclass;
     private final Map<String, JLoxFunction> methods;
 
-    JLoxClass(String name, Map<String, JLoxFunction> methods) {
+    JLoxClass(String name, JLoxClass superclass, Map<String, JLoxFunction> methods) {
         this.name = name;
+        this.superclass = superclass;
         this.methods = methods;
     }
 
     JLoxFunction findMethod(String name) {
+        // 优先返回类自身的方法，其次返回超类的方法
         if (methods.containsKey(name))
             return methods.get(name);
+        if (superclass != null)
+            return superclass.findMethod(name);
         return null;
     }
 

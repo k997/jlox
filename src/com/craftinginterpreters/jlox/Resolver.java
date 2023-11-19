@@ -27,10 +27,11 @@ class Resolver implements Expr.Visitor<Void>,
     // 防止在函数外调用 return
     private FunctionType currentFunction = FunctionType.NONE;
 
-    // 防止在非实例中使用 this
+    // 防止在非实例中使用 this, 以及在无父类时调用 super
     private enum ClassType {
         NONE,
-        CLASS
+        CLASS,
+        SUBCLASS
     }
 
     private ClassType currentClass = ClassType.NONE;
@@ -56,6 +57,18 @@ class Resolver implements Expr.Visitor<Void>,
 
         declare(stmt.name);
         define(stmt.name);
+
+        if (stmt.superclass != null) {
+            // 防止一个类自己继承自己
+            if (stmt.name.lexeme.equals(stmt.superclass.name.lexeme))
+                JLox.error(stmt.superclass.name, "A class can't inherit itself.");
+            currentClass = ClassType.SUBCLASS;
+            resolve(stmt.superclass);
+            // 为超类启用闭包，多次继承时使 super 能指向正确的类
+            // 在解释运行 super 时， this 和 super 的 distance 获取被硬编码，顺序不能调换
+            beginScope();
+            scopes.peek().put("super", true);
+        }
         beginScope();
         scopes.peek().put("this", true);
         for (Stmt.Function method : stmt.methods) {
@@ -65,6 +78,8 @@ class Resolver implements Expr.Visitor<Void>,
             resolveFunction(method, declaration);
         }
         endScope();
+        if (stmt.superclass != null)
+            endScope();
         // 恢复环境
         currentClass = enclosingClass;
         return null;
@@ -218,6 +233,19 @@ class Resolver implements Expr.Visitor<Void>,
     public Void visitSetExpr(Expr.Set expr) {
         resolve(expr.value);
         resolve(expr.object);
+        return null;
+    }
+
+    @Override
+    public Void visitSuperExpr(Expr.Super expr) {
+        if(currentClass == ClassType.NONE)
+        {
+            JLox.error(expr.keyword, "Can't use 'super' outside of a class.");
+        }else if(currentClass != ClassType.SUBCLASS)
+        {
+            JLox.error(expr.keyword, "Can't use 'super' in a class with no superclass.");
+        }
+        resolveLocal(expr, expr.keyword);
         return null;
     }
 
